@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="나만의 AI 의사결정 규칙을 만들고, 같은 테트리스 시드에서 비교하세요. OpenAI Decisions API 기반 실험실."
+    />
+    <title>Decision Playground · AI 전략 실험실</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./"
+        ><span class="logo">▦</span> DECISION
+        <span class="thin">PLAYGROUND</span></a
+      ><a
+        class="tag"
+        id="repo"
+        href="https://github.com/YunTaeeun/decision-playground"
+        target="_blank"
+        rel="noopener"
+        >OPEN SOURCE ↗</a
+      >
+    </header>
+    <main>
+      <div class="intro">
+        <div>
+          <div class="eyebrow">YOUR KEY. YOUR RULES. YOUR EXPERIMENT.</div>
+          <h1>AI의 전략을, 직접 바꾸다<span>.</span></h1>
+          <p>
+            규칙을 쓰고, 플레이를 관찰하고, 같은 시드에서 더 나은 선택을
+            찾아보세요.
+          </p>
+        </div>
+        <span class="game-tag">01 / TETRIS</span>
+      </div>
+      <div class="layout">
+        <section class="arena panel">
+          <div class="panelhead">
+            <span>플레이 보드</span
+            ><span id="status" class="status" role="status">● 준비 완료</span>
+          </div>
+          <div class="gamearea">
+            <div class="boardwrap">
+              <canvas
+                id="board"
+                width="300"
+                height="600"
+                aria-label="10열 20행 테트리스 보드"
+              ></canvas>
+              <div id="overlay"></div>
+            </div>
+            <aside class="gameinfo">
+              <label>NEXT</label
+              ><canvas id="next" width="90" height="65"></canvas
+              ><label>SCORE</label><strong id="score">0</strong
+              ><label>LINES</label><strong id="lines">0</strong
+              ><label>PIECES</label><strong id="pieces">0</strong>
+              <div class="legend">한 수 = 회전 + 착지</div>
+              <div class="seed">
+                7-BAG RANDOMIZER<br /><span>SEED <b id="seedlabel"></b></span>
+              </div>
+            </aside>
+          </div>
+          <div class="controls">
+            <button id="play" class="primary">▶ 실험 시작</button
+            ><button id="step" class="secondary">한 수 →</button>
+          </div>
+          <div class="speed">
+            <label for="speed">재생 속도</label
+            ><input id="speed" type="range" min="1" max="10" value="5" /><span
+              id="speedval"
+              >5×</span
+            >
+          </div>
+          <div class="seedcontrols">
+            <label for="seedinput">실험 시드</label
+            ><input
+              id="seedinput"
+              type="number"
+              min="1"
+              max="999999"
+              value="202610"
+            /><button id="reset" class="secondary">↻ 같은 시드</button
+            ><button
+              id="randomseed"
+              class="secondary"
+              aria-label="새 랜덤 시드"
+            >
+              ⚄
+            </button>
+          </div>
+          <p class="note arena-note">
+            규칙을 바꾼 뒤 같은 시드로 다시 시작하면 동일한 블록 순서로 비교할
+            수 있습니다.
+          </p>
+        </section>
+        <div class="right">
+          <section class="metrics">
+            <div>
+              <label>최근 왕복 시간</label><strong id="value">—</strong
+              ><small>비교 목표 100ms</small>
+            </div>
+            <div>
+              <label>합법적 착지 후보</label><strong id="count">0</strong
+              ><small>모델이 하나를 선택</small>
+            </div>
+            <div>
+              <label>현재 보드 높이</label><strong id="height">0</strong
+              ><small>최상단 블록 기준</small>
+            </div>
+          </section>
+          <section class="panel model">
+            <div class="panelhead">
+              <span>의사결정 규칙</span
+              ><span class="badge">gpt-6-luna · choice</span>
+            </div>
+            <div class="modelbody">
+              <div class="modeltitle">
+                <h2>나만의 플레이 전략</h2>
+                <select id="mode" aria-label="실행 모드">
+                  <option value="api">OpenAI API</option>
+                  <option value="demo">로컬 시연</option>
+                </select>
+              </div>
+              <div class="keyrow">
+                <label for="apikey">OpenAI API 키</label>
+                <div>
+                  <input
+                    id="apikey"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="sk-…"
+                  /><button id="clearkey" aria-label="입력한 API 키 지우기">
+                    지우기
+                  </button>
+                </div>
+                <small
+                  >키는 저장하지 않습니다. 호출 시 서버를 거쳐 OpenAI에
+                  전달됩니다.</small
+                >
+              </div>
+              <div id="connection" class="connection" role="status"></div>
+              <div class="strategybar">
+                <label for="preset">전략 템플릿</label
+                ><select id="preset">
+                  <option value="balanced">균형형</option>
+                  <option value="safe">생존 우선</option>
+                  <option value="attack">줄 제거 우선</option>
+                  <option value="custom">직접 작성</option>
+                </select>
+              </div>
+              <label class="inputlabel" for="rulename">규칙 이름</label
+              ><input
+                class="textinput"
+                id="rulename"
+                maxlength="50"
+                value="균형형 v1"
+              /><label class="inputlabel" for="rules"
+                >모델에게 전달할 규칙
+                <span id="rulecount">0 / 2000</span></label
+              ><textarea
+                id="rules"
+                rows="5"
+                maxlength="2000"
+                spellcheck="false"
+              ></textarea>
+              <p class="note" id="rulehint">
+                규칙은 실제 Decisions 요청의 지침에 포함됩니다. 실행 중에는 현재
+                실험의 규칙을 유지합니다.
+              </p>
+              <div id="demoweights" hidden></div>
+              <div class="runlimit">
+                <label for="limit">실험 길이</label
+                ><input
+                  id="limit"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="50"
+                /><span>수 · 한 수당 API 1회</span>
+              </div>
+              <div class="api-details">
+                <div><label>API 왕복</label><strong id="apims">—</strong></div>
+                <div>
+                  <label>CONFIDENCE</label><strong id="confidence">—</strong>
+                </div>
+              </div>
+              <div class="latency">
+                <div>
+                  <span>평균 <b id="average">—</b></span
+                  ><span>p95 <b id="p95">—</b></span>
+                </div>
+                <svg
+                  id="chart"
+                  viewBox="0 0 500 70"
+                  role="img"
+                  aria-label="최근 의사결정 왕복 시간"
+                ></svg>
+              </div>
+              <p class="note">
+                API 사용료는 입력한 키의 계정에 부과됩니다. 100ms는 보장값이
+                아닙니다. 오류가 나면 멈추며 시연 모드로 자동 전환하지 않습니다.
+              </p>
+            </div>
+          </section>
+          <section class="panel decision">
+            <div class="panelhead">
+              <span>최근 선택</span><span id="turn">TURN 000</span>
+            </div>
+            <div class="decisionbody">
+              <div id="reason" class="reason"></div>
+              <div class="tablewrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>순위</th>
+                      <th>위치 · 회전</th>
+                      <th>제거 줄</th>
+                      <th>선택 확률</th>
+                    </tr>
+                  </thead>
+                  <tbody id="candidates"></tbody>
+                </table>
+              </div>
+              <p class="note">
+                설명은 선택된 보드에서 계산한 지표입니다. 모델의 내부 사고
+                과정은 제공하지 않습니다.
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+      <section class="panel experiments">
+        <div class="panelhead">
+          <span>실험 비교 <b id="savedcount">0</b></span>
+          <div>
+            <button id="save" class="secondary">현재 결과 저장</button
+            ><button id="export" class="secondary">기록 내보내기 ↗</button>
+          </div>
+        </div>
+        <div class="comparisonbody">
+          <p class="muted">
+            실험은 이 브라우저에만 저장됩니다. 같은 모드·시드·실험 길이로
+            비교하세요. OpenAI 모델 선택은 매번 달라질 수 있습니다.
+          </p>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>규칙 · 모드</th>
+                  <th>시드 / 목표 수</th>
+                  <th>점수</th>
+                  <th>제거 줄</th>
+                  <th>진행 수</th>
+                  <th>평균 / p95</th>
+                  <th>상태</th>
+                  <th>다시 실행</th>
+                </tr>
+              </thead>
+              <tbody id="experiments"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <footer>
+        <span>DECISION PLAYGROUND</span
+        ><span>테트리스 · 벽차기 / 홀드 / T-spin 제외</span
+        ><a
+          href="https://developers.openai.com/api/docs/guides/decisions"
+          target="_blank"
+          rel="noopener"
+          >OpenAI Decisions API ↗</a
+        >
+      </footer>
+    </main>
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
